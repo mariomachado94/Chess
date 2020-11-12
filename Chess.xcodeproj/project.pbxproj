@@ -58,13 +58,13 @@
 		AC171B75255B2A270037AC51 /* Chess */ = {
 			isa = PBXGroup;
 			children = (
+				AC171B76255B2A270037AC51 /* ChessApp.swift */,
 				ACFCFA10255B55CA00D6F9D0 /* Model */,
 				ACFCFA0B255B554400D6F9D0 /* View */,
-				AC171B76255B2A270037AC51 /* ChessApp.swift */,
-				AC171B7A255B2A280037AC51 /* Assets.xcassets */,
-				AC171B7F255B2A280037AC51 /* Info.plist */,
-				AC171B7C255B2A280037AC51 /* Preview Content */,
 				AC171BAA255B2E2B0037AC51 /* ChessExtensions.swift */,
+				AC171B7F255B2A280037AC51 /* Info.plist */,
+				AC171B7A255B2A280037AC51 /* Assets.xcassets */,
+				AC171B7C255B2A280037AC51 /* Preview Content */,
 			);
 			path = Chess;
 			sourceTree = "<group>";

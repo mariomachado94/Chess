@@ -42,7 +42,19 @@ struct Coordinates: Equatable {
 }
 struct Chess {
     private(set) var board: [[ChessTile]] = []
+    private(set) var turn = 1
+    var whosTurn: Team {
+        (turn % 2 == 0) ? .black : .white
+    }
+    var whiteTurns: Int {
+        Int(ceil(Double(turn - 1) / 2.0))
+    }
+    var blackTurns: Int {
+        (turn - 1) / 2
+    }
+    
     private var chessPieceCounter: Int = 0
+    
     var selected: Coordinates?
     
     static let boardSize = 8
@@ -99,11 +111,16 @@ struct Chess {
     // MARK: ChessBoard API
     // ----------------------------------------------------------------------------------
     
+    private func canSelect(_ row: Int, _ col: Int) -> Bool {
+        selected == nil && board[row][col].chessPiece != nil && board[row][col].chessPiece!.team == whosTurn
+    }
     mutating func select(_ row: Int, _ col: Int) {
-        if selected == nil && board[row][col].chessPiece != nil {
+        // Check if first tap
+        if canSelect(row, col) {
             selected = Coordinates(row, col)
             board[row][col].highlight = true
         }
+        // Check if second tap
         else if let selected = selected {
             board[selected.row][selected.col].highlight = false
             move(selected, to: Coordinates(row, col))
@@ -115,14 +132,16 @@ struct Chess {
         guard from != to else {
             return
         }
+        turn += 1
         board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
         board[from.row][from.col].chessPiece = nil
     }
     
     mutating func newGame() {
         chessPieceCounter = 0
-        generateBoard()
+        turn = 1
         
+        generateBoard()
         // Set up black
         generateBackRow(forRow: 0, ofTeam: .black)
         generatePawnRow(forRow: 1, ofTeam: .black)

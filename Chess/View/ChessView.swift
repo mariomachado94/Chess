@@ -13,12 +13,20 @@ struct ChessView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack {
+                HStack {
+                    Text("White: \(chessGame.whiteTurns)")
+                    Spacer()
+                    Text((chessGame.whosTurn == .white) ? "WHITE" : "BLACK").font(/*@START_MENU_TOKEN@*/.title/*@END_MENU_TOKEN@*/)
+                    Spacer()
+                    Text("Black: \(chessGame.blackTurns)")
+                }.padding()
+                Board(size: geometry.size).environmentObject(chessGame)
+                Spacer()
                 Button("New Game", action: {
                     withAnimation(.linear) {
                         chessGame.newGame()
                     }
                 })
-                Board(size: geometry.size).environmentObject(chessGame)
             }
         }
     }
