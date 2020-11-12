@@ -8,24 +8,24 @@
 import SwiftUI
 
 struct ChessView: View {
-    @ObservedObject var chessViewModel: ChessViewModel = ChessViewModel()
+    @ObservedObject var chessGame: ChessGame = ChessGame()
     
     var body: some View {
         GeometryReader { geometry in
             VStack {
                 Button("New Game", action: {
                     withAnimation(.linear) {
-                        chessViewModel.newGame()
+                        chessGame.newGame()
                     }
                 })
-                Board(size: geometry.size).environmentObject(chessViewModel)
+                Board(size: geometry.size).environmentObject(chessGame)
             }
         }
     }
 }
 
 struct Board: View {
-    @EnvironmentObject var chessViewModel: ChessViewModel
+    @EnvironmentObject var chessViewModel: ChessGame
     
     let tilesPerRow = 8
     var size: CGSize
@@ -38,53 +38,56 @@ struct Board: View {
             ForEach(0..<tilesPerRow) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<tilesPerRow) { col in
-                        ZStack {
-                            Rectangle().foregroundColor(tileColor(row, col)).frame(width: tileSize, height: tileSize)
-                            ChessPieceV(chessPiece: chessViewModel.chessBoard[row][col])
-                        }.onTapGesture {
-                            withAnimation(.linear) {
-                                chessViewModel.select(row, col)
-                            }
-                        }
+                        TileView(tile: chessViewModel.board[row][col], size: tileSize)
                     }
                 }
             }
         }.border(/*@START_MENU_TOKEN@*/Color.black/*@END_MENU_TOKEN@*/)
     }
+}
+
+struct TileView: View {
+    @EnvironmentObject var chessViewModel: ChessGame
     
-    static let selectedColor = Color.yellow
+    var tile: ChessTile
+    var size: CGFloat
+    
+    var body: some View {
+        ZStack {
+            Rectangle().foregroundColor(tileColor).frame(width: size, height: size)
+            ChessPieceView(chessPiece: tile.chessPiece)
+        }.onTapGesture {
+            withAnimation(.linear) {
+                chessViewModel.select(tile.row, tile.col)
+            }
+        }
+    }
+    
+    static let highlightColor = Color.yellow
     static let primaryTileColor = Color.green
     static let secondaryTileColor = Color.gray
-    func tileColor(_ row: Int, _ col: Int) -> Color {
-        if chessViewModel.isSelected(row, col) {
-            return Board.selectedColor
+    
+    var tileColor: Color {
+        if tile.highlight {
+            return TileView.highlightColor
         }
-        else if row % 2 == 0 {
-            if col % 2 == 0 {
-                return Board.primaryTileColor
-            }
-            else {
-                return Board.secondaryTileColor
-            }
-        }
-        else {
-            if col % 2 == 0 {
-                return Board.secondaryTileColor
-            }
-            else {
-                return Board.primaryTileColor
-            }
+        
+        switch tile.tileType {
+        case .primary:
+            return TileView.primaryTileColor
+        case .secondary:
+            return TileView.secondaryTileColor
         }
     }
 }
 
-struct ChessPieceV: View {
+struct ChessPieceView: View {
     var chessPiece: ChessPiece?
     
     static let pieceTypeToImgName: [PieceType : String] = [.pawn:"triangle.fill", .rook: "hexagon.fill", .knight: "shield.fill", .bishop: "rhombus.fill", .queen: "seal.fill", .king: "crown.fill",]
     var body: some View {
         if let chessPiece = self.chessPiece {
-            Image(systemName: ChessPieceV.pieceTypeToImgName[chessPiece.pieceType] ?? "circle.fill")
+            Image(systemName: ChessPieceView.pieceTypeToImgName[chessPiece.pieceType] ?? "circle.fill")
                 .foregroundColor(chessPiece.team == .white ? Color.white : Color.black)
         }
     }

@@ -13,14 +13,14 @@ class ChessGame: ObservableObject {
     var board: [[ChessTile]] {
         chess.board
     }
-    
+    /* Might not be needed
     func isSelected(_ row: Int, _ col: Int) -> Bool {
         guard let selected = chess.selected else {
             return false
         }
         return selected.row == row && selected.col == col
     }
-    
+    */
     func newGame() {
         chess.newGame()
     }
