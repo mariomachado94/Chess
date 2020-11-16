@@ -20,6 +20,7 @@ struct ChessPiece: Identifiable {
     let id: Int
     let team: Team
     let pieceType: PieceType
+    var hasMoved = false
 }
 
 struct ChessTile: Identifiable {
@@ -55,9 +56,37 @@ struct Chess {
     
     private var chessPieceCounter: Int = 0
     
-    var selected: Coordinates?
+    var selected: Coordinates? {
+        didSet {
+            if selected != nil {
+                calculateSelectedPossibleMoves()
+                print("Selected: \(selected)")
+            }
+            else {
+                board[oldValue!.row][oldValue!.col].highlight = false
+                possibleMoves = nil
+                print("Deselected")
+            }
+        }
+    }
+    var possibleMoves: [Coordinates]? {
+        didSet {
+            if possibleMoves != nil {
+                highlightPossibleMoves()
+                print("Possible moves highlighted: \(possibleMoves)")
+            }
+            else {
+                unhighlightMoves(oldValue)
+                print("Unhighted")
+            }
+        }
+    }
     
     static let boardSize = 8
+    
+    // ----------------------------------------------------------------------------------
+    // MARK: Chess Initialization Functions
+    // ----------------------------------------------------------------------------------
     
     init() {
         newGame()
@@ -107,35 +136,27 @@ struct Chess {
         }
     }
     
-    // ----------------------------------------------------------------------------------
-    // MARK: ChessBoard API
-    // ----------------------------------------------------------------------------------
-    
-    private func canSelect(_ row: Int, _ col: Int) -> Bool {
-        selected == nil && board[row][col].chessPiece != nil && board[row][col].chessPiece!.team == whosTurn
-    }
-    mutating func select(_ row: Int, _ col: Int) {
-        // Check if first tap
-        if canSelect(row, col) {
-            selected = Coordinates(row, col)
-            board[row][col].highlight = true
-        }
-        // Check if second tap
-        else if let selected = selected {
-            board[selected.row][selected.col].highlight = false
-            move(selected, to: Coordinates(row, col))
-            self.selected = nil
-        }
-    }
-    
-    mutating func move(_ from: Coordinates, to: Coordinates) {
-        guard from != to else {
+    private mutating func highlightPossibleMoves() {
+        guard let moves = possibleMoves else {
             return
         }
-        turn += 1
-        board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
-        board[from.row][from.col].chessPiece = nil
+        for loc in moves {
+            board[loc.row][loc.col].highlight = true
+        }
     }
+    
+    private mutating func unhighlightMoves(_ moves: [Coordinates]?) {
+        guard let moves = moves else {
+            return
+        }
+        for loc in moves {
+            board[loc.row][loc.col].highlight = false
+        }
+    }
+    
+    // ----------------------------------------------------------------------------------
+    // MARK: Chess API
+    // ----------------------------------------------------------------------------------
     
     mutating func newGame() {
         chessPieceCounter = 0
@@ -148,5 +169,276 @@ struct Chess {
         // Set up white
         generatePawnRow(forRow: 6, ofTeam: .white)
         generateBackRow(forRow: 7, ofTeam: .white)
+    }
+    
+    // ----------------------------------------------------------------------------------
+    // ----------------------------------------------------------------------------------
+    
+    mutating func select(_ row: Int, _ col: Int) {
+        // Check if first tap
+        if canSelect(row, col) {
+            selected = Coordinates(row, col)
+            board[row][col].highlight = true
+        }
+        // Check if second tap
+        else if let selected = selected {
+            if selected == Coordinates(row, col) {
+                self.selected = nil
+            }
+            // Try to move
+            else if move(selected, to: Coordinates(row, col)) {
+                self.selected = nil
+            }
+            // Else player tapped an impossible move
+            // keep the selection
+        }
+    }
+    private func canSelect(_ row: Int, _ col: Int) -> Bool {
+        selected == nil && board[row][col].chessPiece != nil && board[row][col].chessPiece!.team == whosTurn
+    }
+    
+    /* Moving this into the didset for self.selected
+    private mutating func deselect() {
+        guard let selected = selected else {
+            return
+        }
+        board[selected.row][selected.col].highlight = false
+        self.selected = nil
+    }
+    */
+    
+    // ----------------------------------------------------------------------------------
+    // ----------------------------------------------------------------------------------
+    
+    mutating func move(_ from: Coordinates, to: Coordinates) -> Bool {
+        if !canMove(from, to: to) {
+            return false
+        }
+        
+        turn += 1
+        board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
+        board[to.row][to.col].chessPiece?.hasMoved = true
+        board[from.row][from.col].chessPiece = nil
+        return true
+    }
+    private func canMove(_ from: Coordinates, to: Coordinates) -> Bool {
+        from != to && board[to.row][to.col].highlight
+    }
+    
+    // ----------------------------------------------------------------------------------
+    // ----------------------------------------------------------------------------------
+    
+    private mutating func calculateSelectedPossibleMoves() {
+        print("calculating possible moves...")
+        guard let selected = selected, let piece = board[selected.row][selected.col].chessPiece else {
+            print("guard failed, nil possible moves")
+            possibleMoves = nil
+            return
+        }
+        switch piece.pieceType {
+        case .pawn:
+            print("calculating pawn moves...")
+            possibleMoves = pawnMoves(from: selected, forPiece: piece)
+        case .rook:
+            possibleMoves = rookMoves(from: selected, forPiece: piece)
+        case .knight:
+            possibleMoves = knightMoves(from: selected, forPiece: piece)
+        case .bishop:
+            possibleMoves = bishopMoves(from: selected, forPiece: piece)
+        case .queen:
+            possibleMoves = queenMoves(from: selected, forPiece: piece)
+        case .king:
+            possibleMoves = kingMoves(from: selected, forPiece: piece)
+        }
+    }
+    
+    private func pawnMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        
+        var potentialMove = Coordinates(piece.team == .white ? from.row-1 : from.row+1, from.col)
+        if isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+        }
+        
+        // Hack: moves.count > 0 means first square is empty since it was added as a good move
+        // Meaning the order of if's here is important, this should be second
+        //
+        // Note: !piece.hasMoved will ensure it is always from starting pawn row, index ob is impossible
+        potentialMove = Coordinates(piece.team == .white ? from.row-2 : from.row+2, from.col)
+        if moves.count > 0 && !piece.hasMoved && isEmptyTile(potentialMove){
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(piece.team == .white ? from.row-1 : from.row+1, from.col+1)
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(piece.team == .white ? from.row-1 : from.row+1, from.col-1)
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        return moves
+    }
+    private func rookMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        
+        var potentialMove = Coordinates(from.row+1, from.col)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row += 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row-1, from.col)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row -= 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row, from.col+1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.col += 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row, from.col-1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.col -= 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        return moves
+    }
+    private func knightMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        var potentialMoves: [Coordinates] = []
+        
+        potentialMoves.append(Coordinates(from.row+1, from.col+2))
+        potentialMoves.append(Coordinates(from.row+2, from.col+1))
+        
+        potentialMoves.append(Coordinates(from.row+1, from.col-2))
+        potentialMoves.append(Coordinates(from.row+2, from.col-1))
+        
+        potentialMoves.append(Coordinates(from.row-1, from.col+2))
+        potentialMoves.append(Coordinates(from.row-2, from.col+1))
+        
+        potentialMoves.append(Coordinates(from.row-1, from.col-2))
+        potentialMoves.append(Coordinates(from.row-2, from.col-1))
+        
+        for potentialMove in potentialMoves {
+            if isValidTile(potentialMove) && (isEmptyTile(potentialMove) || containsOpposingTeam(potentialMove, for: piece.team)) {
+                moves.append(potentialMove)
+            }
+        }
+        
+        return moves
+    }
+    private func bishopMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        
+        var potentialMove = Coordinates(from.row+1, from.col+1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row += 1
+            potentialMove.col += 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row-1, from.col-1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row -= 1
+            potentialMove.col -= 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row-1, from.col+1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row -= 1
+            potentialMove.col += 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        potentialMove = Coordinates(from.row+1, from.col-1)
+        while isValidTile(potentialMove) && isEmptyTile(potentialMove) {
+            moves.append(potentialMove)
+            potentialMove.row += 1
+            potentialMove.col -= 1
+        }
+        if isValidTile(potentialMove) && containsOpposingTeam(potentialMove, for: piece.team) {
+            moves.append(potentialMove)
+        }
+        
+        return moves
+    }
+    private func queenMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        
+        moves.append(contentsOf: rookMoves(from: from, forPiece: piece))
+        moves.append(contentsOf: bishopMoves(from: from, forPiece: piece))
+        
+        return moves
+    }
+    private func kingMoves(from: Coordinates, forPiece piece: ChessPiece) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        
+        for potentialMove in adjacentTiles(from) {
+            if isValidTile(potentialMove) && (isEmptyTile(potentialMove) || containsOpposingTeam(potentialMove, for: piece.team)) && !underAttack(potentialMove, opposingTeam: piece.team) {
+                moves.append(potentialMove)
+            }
+        }
+        
+        return moves
+    }
+    private func adjacentTiles(_ location: Coordinates) -> [Coordinates] {
+        var adjacents: [Coordinates] = []
+        
+        adjacents.append(Coordinates(location.row+1, location.col-1))
+        adjacents.append(Coordinates(location.row+1, location.col))
+        adjacents.append(Coordinates(location.row+1, location.col+1))
+        
+        adjacents.append(Coordinates(location.row, location.col-1))
+        adjacents.append(Coordinates(location.row, location.col+1))
+        
+        adjacents.append(Coordinates(location.row-1, location.col-1))
+        adjacents.append(Coordinates(location.row-1, location.col))
+        adjacents.append(Coordinates(location.row-1, location.col+1))
+        
+        return adjacents
+    }
+    private func underAttack(_ location: Coordinates, opposingTeam: Team) -> Bool {
+        // TODO: Implement
+        return false
+    }
+    private func isValidTile(_ loc: Coordinates) -> Bool {
+        loc.row < Chess.boardSize && loc.row >= 0 && loc.col < Chess.boardSize && loc.col >= 0
+    }
+    private func isEmptyTile(_ loc: Coordinates) -> Bool {
+        board[loc.row][loc.col].chessPiece == nil
+    }
+    private func containsOpposingTeam(_ loc: Coordinates, for team: Team) -> Bool {
+        guard let piece =  board[loc.row][loc.col].chessPiece else {
+            return false
+        }
+        return piece.team != team
     }
 }
