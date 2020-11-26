@@ -143,81 +143,38 @@ struct ChessRules {
         
         return moves
     }
-    static func kingMoves(from: Coordinates, forPiece piece: ChessPiece, on board: [[ChessTile]]) -> [Coordinates] {
+    static func kingMoves(from location: Coordinates, forPiece piece: ChessPiece, on board: [[ChessTile]]) -> [Coordinates] {
         var moves: [Coordinates] = []
         
-        for potentialMove in board.adjacentTiles(from) {
-            if (board.isEmptyTile(potentialMove) || board.containsOpposingTeam(potentialMove, of: piece.team)) && !underAttack(at: potentialMove, ignoring: from, byTeam: opposingTeam(of: piece.team), on: board) {
+        for potentialMove in board.adjacentTiles(location) {
+            if (board.isEmptyTile(potentialMove) || board.containsOpposingTeam(potentialMove, of: piece.team)) && !board.underAttack(at: potentialMove, ignoring: location, byTeam: Util.opposingTeam(of: piece.team)) {
                 moves.append(potentialMove)
             }
         }
         
+        moves.append(contentsOf: castleMoves(from: location, forPiece: piece, on: board))
+        
         return moves
     }
-    
-    static func underAttack(at location: Coordinates, ignoring: Coordinates? = nil, byTeam team: Team, on board: [[ChessTile]]) -> Bool {
-        // check for knights
-        for pAttackerPosition in allPotentialKnightMoves(from: location, on: board) {
-            if board.contains(team, [.knight], at: pAttackerPosition) {
-                return true
+    static func castleMoves(from location: Coordinates, forPiece piece: ChessPiece, on board: [[ChessTile]]) -> [Coordinates] {
+        var moves: [Coordinates] = []
+        if piece.hasMoved {
+            return moves
+        }
+        
+        if let fPieceLocation = board.firstPieceLocationInPath(from: location, rowIncrement: 0, colIncrement: 1), let rook = board[fPieceLocation].chessPiece {
+            if rook.pieceType == .rook && !rook.hasMoved && board.pathNotUnderAttack(from: location, rowIncrement: 0, colIncrement: 1,
+                                                                                     until: { $0 == Coordinates(location.row, location.col + 3) }, byTeam: Util.opposingTeam(of: piece.team)) {
+                moves.append(Coordinates(location.row, location.col+2))
             }
         }
-        // check for pawns
-        // check diagonals
-        var pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? 1 : -1, colIncrement: 1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.bishop, .queen], at: atkPosition) || (board.contains(team, [.pawn, .king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
+        if let fPieceLocation = board.firstPieceLocationInPath(from: location, rowIncrement: 0, colIncrement: -1), let rook = board[fPieceLocation].chessPiece {
+            if rook.pieceType == .rook && !rook.hasMoved && board.pathNotUnderAttack(from: location, rowIncrement: 0, colIncrement: -1,
+                                                                                     until: { $0 == Coordinates(location.row, location.col - 3) }, byTeam: Util.opposingTeam(of: piece.team)) {
+                moves.append(Coordinates(location.row, location.col-2))
+            }
         }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? 1 : -1, colIncrement: -1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.bishop, .queen], at: atkPosition) || (board.contains(team, [.pawn, .king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? -1 : 1, colIncrement: -1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.bishop, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? -1 : 1, colIncrement: 1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.bishop, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)){
-            return true
-        }
-        
-        // check straights
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: 1, colIncrement: 0)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.rook, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: -1, colIncrement: 0)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.rook, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: 0, colIncrement: 1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.rook, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        pAttackerPosition = board.firstPieceInPath(from: location, ignoring: ignoring, rowIncrement: 0, colIncrement: -1)
-        if let atkPosition = pAttackerPosition, board.contains(team, [.rook, .queen], at: atkPosition) || (board.contains(team, [.king], at: atkPosition) && areAdjacent(location, atkPosition)) {
-            return true
-        }
-        
-        return false
-    }
-    
-    private static func opposingTeam(of team: Team) -> Team {
-        switch team {
-        case .black:
-            return .white
-        case .white:
-            return .black
-        }
-    }
-    
-    private static func areAdjacent(_ a: Coordinates, _ b: Coordinates) -> Bool {
-        abs(a.row - b.row) < 2 && abs(a.col - b.col) < 2
+                
+        return moves
     }
 }

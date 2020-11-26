@@ -54,6 +54,13 @@ struct Chess {
         (turn - 1) / 2
     }
     
+    static let whiteBackRow = 7
+    static let blackBackRow = 0
+    static let kingColumn = 4
+    
+    var whiteKingLocation = Coordinates(whiteBackRow, kingColumn)
+    var blackKingLocation = Coordinates(blackBackRow, kingColumn)
+    
     private var chessPieceCounter: Int = 0
     
     var selected: Coordinates? {
@@ -206,13 +213,58 @@ struct Chess {
         }
         
         turn += 1
-        board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
-        board[to.row][to.col].chessPiece?.hasMoved = true
-        board[from.row][from.col].chessPiece = nil
+        
+        if from == blackKingLocation || from == whiteKingLocation {
+            moveKing(from, to: to)
+        }
+        else {
+            board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
+            board[to.row][to.col].chessPiece?.hasMoved = true
+            board[from.row][from.col].chessPiece = nil
+        }
         return true
     }
     private func canMove(_ from: Coordinates, to: Coordinates) -> Bool {
         from != to && board[to.row][to.col].highlight
+    }
+    
+    private mutating func moveKing(_ from: Coordinates, to: Coordinates) {
+        if isCastle(from, to: to) {
+            let rookLocation: Coordinates
+            // if king side
+            if to.col > from.col {
+                rookLocation = Coordinates(from.row, to.col + 1)
+                board[to.row][to.col - 1].chessPiece = board[rookLocation].chessPiece
+                board[to.row][to.col - 1].chessPiece?.hasMoved = true
+                board[rookLocation.row][rookLocation.col].chessPiece = nil
+            }
+            // queen side
+            else {
+                rookLocation = Coordinates(from.row, to.col - 2)
+                board[to.row][to.col + 1].chessPiece = board[rookLocation].chessPiece
+                board[to.row][to.col + 1].chessPiece?.hasMoved = true
+                board[rookLocation.row][rookLocation.col].chessPiece = nil
+            }
+        }
+        board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
+        board[to.row][to.col].chessPiece?.hasMoved = true
+        board[from.row][from.col].chessPiece = nil
+        
+        switch from {
+        case blackKingLocation:
+            blackKingLocation = to
+        case whiteKingLocation:
+            whiteKingLocation = to
+        default:
+            print("ERROR: This should never happen")
+        }
+    }
+    private func isCastle(_ from: Coordinates, to: Coordinates) -> Bool {
+        guard let king = board[from].chessPiece, king.pieceType == .king, !king.hasMoved else {
+            return false
+        }
+        
+        return !Util.areAdjacent(from, to)
     }
     
     // ----------------------------------------------------------------------------------

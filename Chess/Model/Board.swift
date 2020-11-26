@@ -37,13 +37,30 @@ extension Array where Element == Array<ChessTile> {
         return piece.team != team
     }
     
-    func firstPieceInPath(from location: Coordinates, ignoring: Coordinates? = nil, rowIncrement: Int, colIncrement: Int) -> Coordinates? {
+    func firstPieceLocationInPath(from location: Coordinates, ignoring: Coordinates? = nil, rowIncrement: Int, colIncrement: Int) -> Coordinates? {
         var next = Coordinates(location.row + rowIncrement, location.col + colIncrement)
         while isValidTile(next) && isEmptyTile(next) || (next == ignoring) {
             next.row += rowIncrement
             next.col += colIncrement
         }
         return isValidTile(next) && !isEmptyTile(next) && next != ignoring ? next : nil
+    }
+    
+    func walkPath(from location: Coordinates, rowIncrement: Int, colIncrement: Int, checking: (Coordinates) -> Bool, until: (Coordinates) -> Bool) -> Bool {
+        let nextLocation = Coordinates(location.row + rowIncrement, location.col + colIncrement)
+        return walk(location: nextLocation, rowIncrement: rowIncrement, colIncrement: colIncrement, checking: checking, until: until)
+    }
+    private func walk(location: Coordinates, rowIncrement: Int, colIncrement: Int, checking: (Coordinates) -> Bool, until: (Coordinates) -> Bool) -> Bool {
+        if !isValidTile(location) || until(location) {
+            return true
+        }
+        else if !checking(location) {
+            return false
+        }
+        else {
+            let nextLocation = Coordinates(location.row + rowIncrement, location.col + colIncrement)
+            return walk(location: nextLocation, rowIncrement: rowIncrement, colIncrement: colIncrement, checking: checking, until: until)
+        }
     }
     
     func adjacentTiles(_ location: Coordinates) -> [Coordinates] {
@@ -68,5 +85,63 @@ extension Array where Element == Array<ChessTile> {
     }
     func isEmptyTile(_ location: Coordinates) -> Bool {
         self[location].chessPiece == nil
+    }
+    
+    func pathNotUnderAttack(from location: Coordinates, rowIncrement: Int, colIncrement: Int, until: (Coordinates) -> Bool, byTeam team: Team) -> Bool {
+        walkPath(from: location, rowIncrement: rowIncrement, colIncrement: colIncrement,
+                 checking: { !self.underAttack(at: $0, byTeam: team) },
+                 until: until)
+    }
+    func underAttack(at location: Coordinates, ignoring: Coordinates? = nil, byTeam team: Team) -> Bool {
+        // check for knights
+        for pAttackerPosition in ChessRules.allPotentialKnightMoves(from: location, on: self) {
+            if self.contains(team, [.knight], at: pAttackerPosition) {
+                return true
+            }
+        }
+        // check for pawns
+        // check diagonals
+        var pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? 1 : -1, colIncrement: 1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.bishop, .queen], at: atkPosition) || (self.contains(team, [.pawn, .king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? 1 : -1, colIncrement: -1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.bishop, .queen], at: atkPosition) || (self.contains(team, [.pawn, .king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? -1 : 1, colIncrement: -1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.bishop, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: team == .white ? -1 : 1, colIncrement: 1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.bishop, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)){
+            return true
+        }
+        
+        // check straights
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: 1, colIncrement: 0)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.rook, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: -1, colIncrement: 0)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.rook, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: 0, colIncrement: 1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.rook, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        pAttackerPosition = self.firstPieceLocationInPath(from: location, ignoring: ignoring, rowIncrement: 0, colIncrement: -1)
+        if let atkPosition = pAttackerPosition, self.contains(team, [.rook, .queen], at: atkPosition) || (self.contains(team, [.king], at: atkPosition) && Util.areAdjacent(location, atkPosition)) {
+            return true
+        }
+        
+        return false
     }
 }
