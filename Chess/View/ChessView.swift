@@ -20,7 +20,8 @@ struct ChessView: View {
                     Spacer()
                     Text("Black: \(chessGame.blackTurns)")
                 }.padding()
-                Board(size: geometry.size).environmentObject(chessGame)
+                BoardView(size: geometry.size).environmentObject(chessGame)
+                Text(chessGame.state.rawValue)
                 Spacer()
                 Button("New Game", action: {
                     withAnimation(.linear) {
@@ -32,7 +33,7 @@ struct ChessView: View {
     }
 }
 
-struct Board: View {
+struct BoardView: View {
     @EnvironmentObject var chessViewModel: ChessGame
     
     let tilesPerRow = 8

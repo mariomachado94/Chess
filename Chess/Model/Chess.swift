@@ -42,6 +42,9 @@ struct Coordinates: Equatable {
     }
 }
 struct Chess {
+    enum State: String {
+        case inprogress = "", check = "Check", checkmate = "Checkmate!", draw = "Draw"
+    }
     private(set) var board: [[ChessTile]] = []
     private(set) var turn = 1
     var whosTurn: Team {
@@ -60,6 +63,26 @@ struct Chess {
     
     var whiteKingLocation = Coordinates(whiteBackRow, kingColumn)
     var blackKingLocation = Coordinates(blackBackRow, kingColumn)
+    
+    var inCheck: Bool {
+        gameInCheck(onTeam: whosTurn)
+    }
+    var noMoves: Bool {
+        !canMove(whosTurn)
+    }
+    var state: State {
+        switch (inCheck, noMoves) {
+        case (false, false):
+            return .inprogress
+        case (true, false):
+            return .check
+        case (true, true):
+            return .checkmate
+        case (false, true):
+            return .draw
+                
+        }
+    }
     
     private var chessPieceCounter: Int = 0
     
@@ -176,6 +199,9 @@ struct Chess {
         // Set up white
         generatePawnRow(forRow: 6, ofTeam: .white)
         generateBackRow(forRow: 7, ofTeam: .white)
+        
+        whiteKingLocation = Coordinates(Chess.whiteBackRow, Chess.kingColumn)
+        blackKingLocation = Coordinates(Chess.blackBackRow, Chess.kingColumn)
     }
     
     // ----------------------------------------------------------------------------------
@@ -271,26 +297,72 @@ struct Chess {
     // ----------------------------------------------------------------------------------
     
     private mutating func calculateSelectedPossibleMoves() {
-        print("calculating possible moves...")
-        guard let selected = selected, let piece = board[selected.row][selected.col].chessPiece else {
-            print("guard failed, nil possible moves")
-            possibleMoves = nil
+        guard let selected = selected else {
             return
         }
+        
+        possibleMoves = calculatePossibleMoves(at: selected)
+    }
+    
+    private func calculatePossibleMoves(at location: Coordinates) -> [Coordinates] {
+        guard let piece = board[location].chessPiece else {
+            return []
+        }
+        
+        var potentialMoves: [Coordinates]
         switch piece.pieceType {
         case .pawn:
-            print("calculating pawn moves...")
-            possibleMoves = ChessRules.pawnMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.pawnMoves(from: location, forPiece: piece, on: board)
         case .rook:
-            possibleMoves = ChessRules.rookMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.rookMoves(from: location, forPiece: piece, on: board)
         case .knight:
-            possibleMoves = ChessRules.knightMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.knightMoves(from: location, forPiece: piece, on: board)
         case .bishop:
-            possibleMoves = ChessRules.bishopMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.bishopMoves(from: location, forPiece: piece, on: board)
         case .queen:
-            possibleMoves = ChessRules.queenMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.queenMoves(from: location, forPiece: piece, on: board)
         case .king:
-            possibleMoves = ChessRules.kingMoves(from: selected, forPiece: piece, on: board)
+            potentialMoves = Movement.kingMoves(from: location, forPiece: piece, on: board)
         }
+        
+        potentialMoves = potentialMoves.filter{ ensureNoSelfCheck(location, to: $0) }
+        return potentialMoves
+    }
+    
+    private func canMove(_ team: Team) -> Bool {
+        let kingLocation = team == .white ? whiteKingLocation : blackKingLocation
+        if calculatePossibleMoves(at: kingLocation).count > 0 {
+            return true
+        }
+        
+        // Check every other piece
+        for row in 0..<board.count {
+            for col in 0..<board[0].count {
+                guard let piece = board[row][col].chessPiece, piece.team == team else {
+                    continue
+                }
+                if calculatePossibleMoves(at: Coordinates(row, col)).count > 0 {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    private func gameInCheck(onTeam team: Team) -> Bool {
+        let kingLocation = team == .white ? whiteKingLocation : blackKingLocation
+        return board.underAttack(at: kingLocation, byTeam: Util.opposingTeam(of: team))
+    }
+    private func ensureNoSelfCheck(_ location: Coordinates, to: Coordinates) -> Bool {
+        let kingLocation = whosTurn == .white ? whiteKingLocation : blackKingLocation
+        if kingLocation != location {
+            var potentialBoard = board
+            potentialBoard[to.row][to.col].chessPiece = potentialBoard[location.row][location.col].chessPiece
+            potentialBoard[location.row][location.col].chessPiece = nil
+            return !potentialBoard.underAttack(at: kingLocation, byTeam: Util.opposingTeam(of: whosTurn))
+        }
+        // If the king is being moved,
+        // possiblities have already been checked to be safe
+        return true
     }
 }

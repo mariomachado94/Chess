@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct ChessRules {
+struct Movement {
     static let increments = [1, -1]
     
     static func pawnMoves(from: Coordinates, forPiece piece: ChessPiece, on board: [[ChessTile]]) -> [Coordinates] {

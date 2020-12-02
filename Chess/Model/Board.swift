@@ -94,7 +94,7 @@ extension Array where Element == Array<ChessTile> {
     }
     func underAttack(at location: Coordinates, ignoring: Coordinates? = nil, byTeam team: Team) -> Bool {
         // check for knights
-        for pAttackerPosition in ChessRules.allPotentialKnightMoves(from: location, on: self) {
+        for pAttackerPosition in Movement.allPotentialKnightMoves(from: location, on: self) {
             if self.contains(team, [.knight], at: pAttackerPosition) {
                 return true
             }

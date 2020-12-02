@@ -14,6 +14,10 @@ class ChessGame: ObservableObject {
         chess.board
     }
     
+    var state: Chess.State {
+        chess.state
+    }
+    
     var whosTurn: Team {
         chess.whosTurn
     }
