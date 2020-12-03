@@ -73,8 +73,8 @@ struct TileView: View {
     }
     
     static let highlightColor = Color.yellow
-    static let primaryTileColor = Color.green
-    static let secondaryTileColor = Color.gray
+    static let lightTileColor = Color.green
+    static let darkTileColor = Color.gray
     
     var tileColor: Color {
         if tile.highlight {
@@ -82,10 +82,10 @@ struct TileView: View {
         }
         
         switch tile.tileType {
-        case .primary:
-            return TileView.primaryTileColor
-        case .secondary:
-            return TileView.secondaryTileColor
+        case .light:
+            return TileView.lightTileColor
+        case .dark:
+            return TileView.darkTileColor
         }
     }
 }

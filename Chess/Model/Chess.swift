@@ -11,7 +11,7 @@ enum Team {
     case white, black
 }
 enum TileType {
-    case primary, secondary
+    case light, dark
 }
 enum PieceType {
     case king, queen, rook, bishop, knight, pawn
@@ -41,6 +41,47 @@ struct Coordinates: Equatable {
         self.col = col
     }
 }
+
+struct Move {
+    let from: Coordinates
+    let to: Coordinates
+    let secondaryFrom: Coordinates?
+    let secondaryTo: Coordinates?
+    let captures: ChessPiece?
+    let captureLocation: Coordinates?
+    
+    init(from: Coordinates, to: Coordinates) {
+        self.from = from
+        self.to = to
+        self.secondaryFrom = nil
+        self.secondaryTo = nil
+        self.captures = nil
+        self.captureLocation = nil
+    }
+    
+    init(fromToPairs: [Coordinates]) {
+        self.from = fromToPairs[0]
+        self.to = fromToPairs[1]
+        self.secondaryFrom = fromToPairs[2]
+        self.secondaryTo = fromToPairs[3]
+        self.captures = nil
+        self.captureLocation = nil
+    }
+    
+    init(from: Coordinates, to: Coordinates, captures: ChessPiece) {
+        self.init(from: from, to: to, captures: captures, captureLocation: to)
+    }
+    
+    init(from: Coordinates, to: Coordinates, captures: ChessPiece, captureLocation: Coordinates) {
+        self.from = from
+        self.to = to
+        self.captures = captures
+        self.captureLocation = captureLocation
+        self.secondaryFrom = nil
+        self.secondaryTo = nil
+    }
+}
+
 struct Chess {
     enum State: String {
         case inprogress = "", check = "Check", checkmate = "Checkmate!", draw = "Draw"
@@ -55,6 +96,12 @@ struct Chess {
     }
     var blackTurns: Int {
         (turn - 1) / 2
+    }
+    
+    var moves: [Move] = [] {
+        didSet {
+            print(moves.last!)
+        }
     }
     
     static let whiteBackRow = 7
@@ -90,24 +137,23 @@ struct Chess {
         didSet {
             if selected != nil {
                 calculateSelectedPossibleMoves()
-                print("Selected: \(selected)")
             }
             else {
-                board[oldValue!.row][oldValue!.col].highlight = false
+                guard let oldValue = oldValue else {
+                    return
+                }
+                board[oldValue.row][oldValue.col].highlight = false
                 possibleMoves = nil
-                print("Deselected")
             }
         }
     }
-    var possibleMoves: [Coordinates]? {
+    var possibleMoves: [Move]? {
         didSet {
             if possibleMoves != nil {
-                highlightPossibleMoves()
-                print("Possible moves highlighted: \(possibleMoves)")
+                highlightMoveTos(possibleMoves, highlight: true)
             }
             else {
-                unhighlightMoves(oldValue)
-                print("Unhighted")
+                highlightMoveTos(oldValue, highlight: false)
             }
         }
     }
@@ -160,27 +206,18 @@ struct Chess {
     private func tileType(_ row: Int, _ col: Int) -> TileType {
         switch (row + col) % 2 {
         case 0:
-            return .primary
+            return .light
         default:
-            return .secondary
+            return .dark
         }
     }
     
-    private mutating func highlightPossibleMoves() {
-        guard let moves = possibleMoves else {
-            return
-        }
-        for loc in moves {
-            board[loc.row][loc.col].highlight = true
-        }
-    }
-    
-    private mutating func unhighlightMoves(_ moves: [Coordinates]?) {
+    private mutating func highlightMoveTos(_ moves: [Move]?, highlight: Bool) {
         guard let moves = moves else {
             return
         }
-        for loc in moves {
-            board[loc.row][loc.col].highlight = false
+        for move in moves {
+            board[move.to.row][move.to.col].highlight = highlight
         }
     }
     
@@ -208,8 +245,11 @@ struct Chess {
     // ----------------------------------------------------------------------------------
     
     mutating func select(_ row: Int, _ col: Int) {
-        // Check if first tap
-        if canSelect(row, col) {
+        if isDeselect(row, col) {
+            selected = nil
+        }
+        else if canSelect(row, col) {
+            selected = nil
             selected = Coordinates(row, col)
             board[row][col].highlight = true
         }
@@ -227,55 +267,35 @@ struct Chess {
         }
     }
     private func canSelect(_ row: Int, _ col: Int) -> Bool {
-        selected == nil && board[row][col].chessPiece != nil && board[row][col].chessPiece!.team == whosTurn
+        board[row][col].chessPiece != nil && board[row][col].chessPiece!.team == whosTurn
+    }
+    private func isDeselect(_ row: Int, _ col: Int) -> Bool {
+        selected != nil && selected!.row == row && selected!.col == col
     }
     
     // ----------------------------------------------------------------------------------
     // ----------------------------------------------------------------------------------
     
     mutating func move(_ from: Coordinates, to: Coordinates) -> Bool {
-        if !canMove(from, to: to) {
+        guard let move = getMove(from, to: to) else {
             return false
         }
         
         turn += 1
         
         if from == blackKingLocation || from == whiteKingLocation {
-            moveKing(from, to: to)
+            trackKingLocation(from, to: to)
         }
-        else {
-            board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
-            board[to.row][to.col].chessPiece?.hasMoved = true
-            board[from.row][from.col].chessPiece = nil
-        }
+        
+        board.execute(move)
+        moves.append(move)
         return true
     }
-    private func canMove(_ from: Coordinates, to: Coordinates) -> Bool {
-        from != to && board[to.row][to.col].highlight
+    private func getMove(_ from: Coordinates, to: Coordinates) -> Move? {
+        possibleMoves?.first(where: { from == $0.from && to == $0.to } )
     }
     
-    private mutating func moveKing(_ from: Coordinates, to: Coordinates) {
-        if isCastle(from, to: to) {
-            let rookLocation: Coordinates
-            // if king side
-            if to.col > from.col {
-                rookLocation = Coordinates(from.row, to.col + 1)
-                board[to.row][to.col - 1].chessPiece = board[rookLocation].chessPiece
-                board[to.row][to.col - 1].chessPiece?.hasMoved = true
-                board[rookLocation.row][rookLocation.col].chessPiece = nil
-            }
-            // queen side
-            else {
-                rookLocation = Coordinates(from.row, to.col - 2)
-                board[to.row][to.col + 1].chessPiece = board[rookLocation].chessPiece
-                board[to.row][to.col + 1].chessPiece?.hasMoved = true
-                board[rookLocation.row][rookLocation.col].chessPiece = nil
-            }
-        }
-        board[to.row][to.col].chessPiece = board[from.row][from.col].chessPiece
-        board[to.row][to.col].chessPiece?.hasMoved = true
-        board[from.row][from.col].chessPiece = nil
-        
+    private mutating func trackKingLocation(_ from: Coordinates, to: Coordinates) {
         switch from {
         case blackKingLocation:
             blackKingLocation = to
@@ -284,13 +304,6 @@ struct Chess {
         default:
             print("ERROR: This should never happen")
         }
-    }
-    private func isCastle(_ from: Coordinates, to: Coordinates) -> Bool {
-        guard let king = board[from].chessPiece, king.pieceType == .king, !king.hasMoved else {
-            return false
-        }
-        
-        return !Util.areAdjacent(from, to)
     }
     
     // ----------------------------------------------------------------------------------
@@ -304,15 +317,15 @@ struct Chess {
         possibleMoves = calculatePossibleMoves(at: selected)
     }
     
-    private func calculatePossibleMoves(at location: Coordinates) -> [Coordinates] {
+    private func calculatePossibleMoves(at location: Coordinates) -> [Move] {
         guard let piece = board[location].chessPiece else {
             return []
         }
         
-        var potentialMoves: [Coordinates]
+        var potentialMoves: [Move]
         switch piece.pieceType {
         case .pawn:
-            potentialMoves = Movement.pawnMoves(from: location, forPiece: piece, on: board)
+            potentialMoves = Movement.pawnMoves(from: location, forPiece: piece, on: board, lastMove: moves.last)
         case .rook:
             potentialMoves = Movement.rookMoves(from: location, forPiece: piece, on: board)
         case .knight:
@@ -325,7 +338,7 @@ struct Chess {
             potentialMoves = Movement.kingMoves(from: location, forPiece: piece, on: board)
         }
         
-        potentialMoves = potentialMoves.filter{ ensureNoSelfCheck(location, to: $0) }
+        potentialMoves = potentialMoves.filter{ ensureNoSelfCheck(forMove: $0) }
         return potentialMoves
     }
     
@@ -353,6 +366,11 @@ struct Chess {
         let kingLocation = team == .white ? whiteKingLocation : blackKingLocation
         return board.underAttack(at: kingLocation, byTeam: Util.opposingTeam(of: team))
     }
+    
+    private func ensureNoSelfCheck(forMove move: Move) -> Bool {
+        ensureNoSelfCheck(move.from, to: move.to)
+    }
+    
     private func ensureNoSelfCheck(_ location: Coordinates, to: Coordinates) -> Bool {
         let kingLocation = whosTurn == .white ? whiteKingLocation : blackKingLocation
         if kingLocation != location {

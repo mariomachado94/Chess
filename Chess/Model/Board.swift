@@ -11,6 +11,21 @@ import Foundation
  Extensions for a [[ChessTile]] Board
  */
 extension Array where Element == Array<ChessTile> {
+    
+    mutating func execute(_ move: Move) {
+        self[move.to.row][move.to.col].chessPiece = self[move.from.row][move.from.col].chessPiece
+        self[move.to.row][move.to.col].chessPiece?.hasMoved = true
+        self[move.from.row][move.from.col].chessPiece = nil
+        if let capLocation = move.captureLocation, capLocation != move.to {
+            self[capLocation.row][capLocation.col].chessPiece = nil
+        }
+        if let secMoveFrom = move.secondaryFrom, let secMoveTo = move.secondaryTo {
+            self[secMoveTo.row][secMoveTo.col].chessPiece = self[secMoveFrom.row][secMoveFrom.col].chessPiece
+            self[secMoveTo.row][secMoveTo.col].chessPiece?.hasMoved = true
+            self[secMoveFrom.row][secMoveFrom.col].chessPiece = nil
+        }
+    }
+    
     func contains(_ team: Team, _ pieceTypes: [PieceType], at location: Coordinates) -> Bool {
         guard let piece = self[location.row][location.col].chessPiece else {
             return false
@@ -94,7 +109,7 @@ extension Array where Element == Array<ChessTile> {
     }
     func underAttack(at location: Coordinates, ignoring: Coordinates? = nil, byTeam team: Team) -> Bool {
         // check for knights
-        for pAttackerPosition in Movement.allPotentialKnightMoves(from: location, on: self) {
+        for pAttackerPosition in Movement.allPotentialKnightMoveTos(from: location, on: self) {
             if self.contains(team, [.knight], at: pAttackerPosition) {
                 return true
             }
